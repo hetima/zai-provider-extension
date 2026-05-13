@@ -3,6 +3,10 @@ import packageJson from "../package.json";
 import { ZaiChatModelProvider } from "./provider";
 import { registerZaiTools } from "./tools";
 import { shouldShowWelcome, showWelcomePanel } from "./welcome";
+import {
+  initializeContextWindowHookBridge,
+  disposeContextWindowHookBridge,
+} from "./context-window-hook-bridge";
 
 // Global provider reference for API key management
 let _provider: ZaiChatModelProvider | null = null;
@@ -73,6 +77,22 @@ export function activate(context: vscode.ExtensionContext) {
 
   console.log("[Z.ai Provider] Extension activated");
 
+  // Initialize context window hook to inject usage data into
+  // VS Code's context window widget for accurate token counts.
+  void initializeContextWindowHookBridge()
+    .then((success) => {
+      console.log(
+        "[Z.ai Provider] Context window hook initialized:",
+        success
+      );
+    })
+    .catch((error: unknown) => {
+      console.error(
+        "[Z.ai Provider] Failed to initialize context window hook:",
+        error
+      );
+    });
+
   // Show welcome page on first install (when no API key is stored)
   void shouldShowWelcome(context)
     .then((show) => {
@@ -95,4 +115,7 @@ export function activate(context: vscode.ExtensionContext) {
 export function deactivate() {
   console.log("[Z.ai Provider] Extension deactivated");
   _provider = null;
+  void disposeContextWindowHookBridge().catch(() => {
+    // silently ignore
+  });
 }

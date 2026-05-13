@@ -18,6 +18,11 @@ import type {
   Json,
   ZaiRequestBody,
 } from "./types";
+import {
+  reportUsageToContextWindowForRequest,
+  reportProgressWithContextWindowRequest,
+  clearContextWindowRequest,
+} from "./context-window-hook-bridge";
 import { ZAI_MODELS } from "./types";
 import {
   convertMessages,
@@ -434,6 +439,7 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
     this._emittedTextToolCallIds.clear();
     this._usageMetrics = { prompt_tokens: 0, completion_tokens: 0 };
     this._usageReported = false;
+    const requestId = crypto.randomUUID();
     const abortController = new AbortController();
     const cancellationSubscription = token.onCancellationRequested(() => {
       abortController.abort();
@@ -442,7 +448,11 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
     const trackingProgress: Progress<LanguageModelResponsePart> = {
       report: (part) => {
         try {
-          progress.report(part);
+          reportProgressWithContextWindowRequest(
+            requestId,
+            progress as vscode.Progress<vscode.LanguageModelResponsePart2>,
+            part as vscode.LanguageModelResponsePart2,
+          );
         } catch (e) {
           console.error("[Z.ai Model Provider] Progress.report failed", {
             modelId: model.id,
@@ -532,7 +542,7 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
       });
       const toolTokenCount = this.estimateToolTokens(toolConfig.tools);
       const effectiveModelInfo = this.getModelInfo(effectiveModelId);
-      const mo = options.modelOptions as Record<string, Json> | undefined;
+      const mo = options.modelOptions;
       const maxTokensVal =
         typeof mo?.max_tokens === "number" ? mo.max_tokens : DEFAULT_MAX_TOKENS;
       const temperatureVal =
@@ -642,7 +652,7 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
           );
           progress.report({
             value: `⏳ Request failed (${lastStatusCode}). Retry attempt ${attempt}/${MAX_RETRIES} (waiting ${delay / 1000}s)...`,
-          } as unknown as LanguageModelResponsePart);
+          });
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
 
@@ -749,7 +759,8 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
             await this.processStreamingResponse(
               retryResponse.body,
               trackingProgress,
-              token
+              token,
+              requestId
             );
             return;
           }
@@ -788,7 +799,8 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
           await this.processStreamingResponse(
             response.body,
             trackingProgress,
-            token
+            token,
+            requestId
           );
           // Success - reset retry count for potential future requests
           streamRetryCount = 0;
@@ -819,7 +831,7 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
           );
           progress.report({
             value: `⏳ Streaming error. Retry ${streamRetryCount}/${MAX_RETRIES} (waiting ${delay / 1000}s)...`,
-          } as unknown as LanguageModelResponsePart);
+          });
           await new Promise((resolve) => setTimeout(resolve, delay));
 
           // Re-fetch the request for retry
@@ -940,7 +952,8 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
   private async processStreamingResponse(
     responseBody: ReadableStream<Uint8Array>,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
+    requestId: string
   ): Promise<void> {
     const reader = responseBody.getReader();
     const decoder = new TextDecoder();
@@ -1010,6 +1023,14 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
                 this._usageMetrics.completion_tokens =
                   parsed.usage.completion_tokens;
               }
+              // Report usage to context window hook for accurate token display
+              reportUsageToContextWindowForRequest(requestId, {
+                prompt_tokens: this._usageMetrics.prompt_tokens,
+                completion_tokens: this._usageMetrics.completion_tokens,
+                total_tokens:
+                  this._usageMetrics.prompt_tokens +
+                  this._usageMetrics.completion_tokens,
+              });
             }
             // Skip processDelta for usage-only final chunk (empty choices)
             if (parsed.choices && parsed.choices.length > 0) {
@@ -1048,6 +1069,7 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
       this._reasoningContentBuffer = "";
       this._usageMetrics = { prompt_tokens: 0, completion_tokens: 0 };
       this._usageReported = false;
+      clearContextWindowRequest(requestId);
     }
   }
 
@@ -1395,7 +1417,7 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
     let input: Record<string, Json> | undefined;
     const inputVal = obj.input;
     if (inputVal && typeof inputVal === "object" && !Array.isArray(inputVal)) {
-      input = inputVal as Record<string, Json>;
+      input = inputVal;
     }
 
     if (!input) {
@@ -1411,7 +1433,7 @@ export class ZaiChatModelProvider implements LanguageModelChatProvider {
         typeof argsVal === "object" &&
         !Array.isArray(argsVal)
       ) {
-        input = argsVal as Record<string, Json>;
+        input = argsVal;
       }
     }
 

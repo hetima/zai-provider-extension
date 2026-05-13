@@ -63,6 +63,11 @@
           "type": "boolean",
           "default": true,
           "description": "Enable thinking/reasoning process display in chat responses. When disabled, the model's reasoning will not be shown."
+        },
+        "zai.fix001ContextIndicatorDisplay": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fix context window indicator to show actual token usage instead of 0. Uses internal API hooking as a workaround for VS Code's LanguageModelChatProvider API limitation."
         }
       }
     }
@@ -95,6 +100,10 @@
     "prettier": "^3.8.1",
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3",
-    "typescript-eslint": "^8.24.1"
-  }
+    "typescript-eslint": "^8.24.1",
+    "openai": "^6.36.0"
+  },
+  "enabledApiProposals": [
+    "chatProvider"
+  ]
 }

@@ -152,6 +152,8 @@ export interface ProvideLanguageModelChatResponseOptions {
     max_tokens?: number;
     top_p?: number;
     stop?: string | string[];
+    frequency_penalty?: number;
+    presence_penalty?: number;
   };
   tools?: readonly LanguageModelTool[];
   toolMode?: LanguageModelChatToolMode;
@@ -210,11 +212,18 @@ export interface Progress<T> {
   report(part: T): void;
 }
 
+export class LanguageModelThinkingPart {
+  constructor(public readonly value: string) {}
+}
+
 export type LanguageModelResponsePart =
   | LanguageModelTextPart
   | LanguageModelToolCallPart
   | LanguageModelToolResultPart
-  | LanguageModelDataPart;
+  | LanguageModelDataPart
+  | LanguageModelThinkingPart;
+
+export type LanguageModelResponsePart2 = LanguageModelResponsePart;
 
 export interface Uri {
   toString(): string;

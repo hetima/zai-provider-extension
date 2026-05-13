@@ -401,7 +401,7 @@ export function convertMessages(
 
     // Handle tool results
     const toolResults = getToolResultEntries(
-      msg.content as Array<vscode.LanguageModelInputPart | LegacyPart>,
+      msg.content,
       options?.maxToolResultChars
     );
     for (const tr of toolResults) {
